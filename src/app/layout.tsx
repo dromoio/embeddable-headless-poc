@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RXNT - POC",
-  description: "Proof of concept application for RXNT",
+  title: "acme - POC",
+  description: "Proof of concept application for acme",
 };
 
 export default function RootLayout({

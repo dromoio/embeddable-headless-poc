@@ -7,8 +7,8 @@ export function Navbar() {
         <div className="flex h-16 items-center">
           <div className="flex items-center gap-2">
             <Image
-              src="/25th-anniversary-logo-2.webp"
-              alt="RXNT Logo"
+              src="/acme-logo.png"
+              alt="acme Logo"
               width={120}
               height={40}
               className="h-10 w-auto"
