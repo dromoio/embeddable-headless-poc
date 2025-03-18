@@ -1,9 +1,13 @@
+"use client";
+
 import { ArrowUpToLine, FileSpreadsheet } from "lucide-react";
 import { ResultsArea } from "@/components/results-area";
 import { UserFormData } from "./user-form";
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
-import { mergeRowsById, RowData } from "@/utils/merge-rows";
+import { HeadlessImportReview } from "./headless-import-review";
+
+type RowData = Record<string, string | number | boolean>;
 
 interface HeadlessProps {
   userData: UserFormData;
@@ -13,12 +17,14 @@ type ImportStatus = {
   status: "success" | "needs_review" | "error";
   data?: Record<string, string | number | boolean>[];
   reviewUrl?: string;
+  importId?: string;
   error?: string;
 };
 
 export const Headless = ({ userData }: HeadlessProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [importStatus, setImportStatus] = useState<ImportStatus | null>(null);
+  const [showReview, setShowReview] = useState(false);
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
@@ -27,6 +33,7 @@ export const Headless = ({ userData }: HeadlessProps) => {
       const file = acceptedFiles[0];
       setIsUploading(true);
       setImportStatus(null);
+      setShowReview(false);
 
       try {
         const formData = new FormData();
@@ -53,16 +60,15 @@ export const Headless = ({ userData }: HeadlessProps) => {
         }
 
         if (result.status === "success" && result.data) {
-          // Transform the data using mergeRowsById before setting the import status
-          const mergedData = mergeRowsById(result.data as RowData[]);
           setImportStatus({
             status: "success",
-            data: mergedData as Record<string, string | number | boolean>[],
+            data: result.data as RowData[],
           });
-        } else if (result.status === "needs_review" && result.reviewUrl) {
+        } else if (result.status === "needs_review") {
           setImportStatus({
             status: "needs_review",
             reviewUrl: result.reviewUrl,
+            importId: result.importId,
           });
         } else {
           throw new Error("Invalid response format");
@@ -81,6 +87,25 @@ export const Headless = ({ userData }: HeadlessProps) => {
     [userData]
   );
 
+  const handleStartReview = () => {
+    if (importStatus?.importId) {
+      setShowReview(true);
+    }
+  };
+
+  const handleReviewComplete = (
+    result: "success" | "canceled" | "error",
+    data?: RowData[]
+  ) => {
+    if (result === "success" && data) {
+      setImportStatus({
+        status: "success",
+        data: data as RowData[],
+      });
+    }
+    setShowReview(false);
+  };
+
   const acceptedFileTypes = {
     "text/csv": [".csv"],
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [
@@ -94,6 +119,17 @@ export const Headless = ({ userData }: HeadlessProps) => {
     accept: acceptedFileTypes,
     multiple: false,
   });
+
+  // Show review UI when in review mode
+  if (showReview && importStatus?.importId) {
+    return (
+      <HeadlessImportReview
+        importId={importStatus.importId}
+        onComplete={handleReviewComplete}
+        onBack={() => setShowReview(false)}
+      />
+    );
+  }
 
   return (
     <div className="grid grid-cols-3 gap-4">
@@ -132,6 +168,8 @@ export const Headless = ({ userData }: HeadlessProps) => {
           }
           needsReview={importStatus?.status === "needs_review"}
           reviewUrl={importStatus?.reviewUrl}
+          onReview={handleStartReview}
+          hasImportId={!!importStatus?.importId}
         />
       </div>
     </div>

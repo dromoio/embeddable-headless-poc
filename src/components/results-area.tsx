@@ -9,37 +9,54 @@ import {
 import { Table as TableIcon, AlertTriangle } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 
 interface ResultsAreaProps {
   data?: Record<string, string | number | boolean>[];
   needsReview?: boolean;
   reviewUrl?: string;
+  onReview?: () => void;
+  hasImportId?: boolean;
 }
 
 export const ResultsArea = ({
   data,
   needsReview,
   reviewUrl,
+  onReview,
+  hasImportId,
 }: ResultsAreaProps) => {
   const columns = data && data.length > 0 ? Object.keys(data[0]) : [];
 
   return (
     <ScrollArea className="h-[calc(100vh-400px)] w-full rounded-md border">
-      {needsReview && reviewUrl && (
+      {needsReview && (
         <div className="p-4">
           <Alert>
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Review Required</AlertTitle>
             <AlertDescription className="mt-2">
-              Your import needs review. Please{" "}
-              <a
-                href={reviewUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium underline underline-offset-4"
-              >
-                click here
-              </a>{" "}
+              Your import needs review.{" "}
+              {hasImportId && onReview ? (
+                <Button
+                  variant="link"
+                  className="h-auto p-0 font-medium"
+                  onClick={onReview}
+                >
+                  Click here
+                </Button>
+              ) : reviewUrl ? (
+                <a
+                  href={reviewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium underline underline-offset-4"
+                >
+                  Click here
+                </a>
+              ) : (
+                <span>Please check your import status.</span>
+              )}{" "}
               to review and complete the import.
             </AlertDescription>
           </Alert>
