@@ -33,15 +33,6 @@ export const HeadlessImportReview = ({
   >("loading");
   const [error, setError] = useState<string | null>(null);
 
-  // Function to initialize all window-scoped variables
-  const initWindowVariables = () => {
-    // Only run on client-side
-    if (typeof window === "undefined") return;
-
-    // You can add more window variables as needed
-    // window.SOME_OTHER_VARIABLE = someValue;
-  };
-
   useEffect(() => {
     const initializeReview = async () => {
       try {

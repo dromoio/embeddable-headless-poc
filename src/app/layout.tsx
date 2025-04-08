@@ -37,6 +37,11 @@ export default function RootLayout({
         </main>
         <Toaster />
       </body>
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `window.DROMO_WIDGET_OVERRIDE = "http://localhost:3000/";`,
+        }}
+      />
     </html>
   );
 }

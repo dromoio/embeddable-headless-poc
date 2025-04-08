@@ -123,6 +123,7 @@ export default function ImportsPage() {
     try {
       return formatDistanceToNow(new Date(dateString), { addSuffix: true });
     } catch (error) {
+      console.error("Error formatting date:", error);
       return "Invalid date";
     }
   };
