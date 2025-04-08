@@ -167,116 +167,181 @@ async function downloadFromPresignedUrl(presignedUrl: string) {
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function POST(request: NextRequest) {
-  try {
-    const formData = await request.formData();
-    const file = formData.get("file") as File;
-    const userDataStr = formData.get("userData") as string;
-    const schemaId = formData.get("schemaId") as string | null;
+  let streamController: ReadableStreamDefaultController<Uint8Array>;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      streamController = controller;
+    },
+  });
 
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+  const encoder = new TextEncoder();
+  const enqueue = (data: object) => {
+    // Encode the JSON string with a newline delimiter before enqueuing
+    streamController.enqueue(encoder.encode(JSON.stringify(data) + "\n"));
+  };
+  const closeStream = () => {
+    try {
+      streamController.close();
+    } catch (e) {
+      console.error("Error closing stream:", e);
     }
-
-    if (!userDataStr) {
-      return NextResponse.json(
-        { error: "No user data provided" },
-        { status: 400 }
-      );
+  };
+  const streamError = (message: string, status: number, details?: unknown) => {
+    try {
+      enqueue({ status: "error", error: message, details });
+    } catch (e) {
+      console.error("Error enqueuing error message:", e);
     }
+    closeStream();
+    // Note: We can't return a traditional error response here as the stream headers are already sent.
+    // The error is sent through the stream itself.
+  };
 
-    const userData = JSON.parse(userDataStr);
-    console.log(
-      "Processing file:",
-      file.name,
-      "type:",
-      file.type,
-      "size:",
-      file.size,
-      "Schema ID:",
-      schemaId || "(Not provided, using default)"
-    );
+  // Process request in background, allowing the stream response to be sent immediately
+  (async () => {
+    try {
+      const formData = await request.formData();
+      const file = formData.get("file") as File;
+      const userDataStr = formData.get("userData") as string;
+      const schemaId = formData.get("schemaId") as string | null;
 
-    // Create headless import with user data and schemaId
-    const importResponse = await createHeadlessImport(
-      file.name,
-      userData,
-      schemaId
-    );
-    console.log("Import created with ID:", importResponse.id);
-
-    // Upload file
-    const fileBuffer = await file.arrayBuffer();
-    await uploadFileToUrl(
-      importResponse.upload,
-      fileBuffer,
-      file.type || "application/octet-stream"
-    );
-
-    // Wait a moment to allow the server to process the upload
-    console.log("Waiting 5 seconds before checking status...");
-    await wait(5000);
-
-    // Poll for status until complete or error
-    let importStatus;
-    let attempts = 0;
-
-    while (attempts < MAX_ATTEMPTS) {
-      importStatus = await checkImportStatus(importResponse.id);
-      console.log(
-        `Status check ${attempts + 1}/${MAX_ATTEMPTS}: ${importStatus.status}`
-      );
-
-      switch (importStatus.status) {
-        case "SUCCESSFUL":
-          // Get presigned URL and download data
-          const presignedUrl = await getImportPresignedUrl(importResponse.id);
-          const results = await downloadFromPresignedUrl(presignedUrl);
-          return NextResponse.json({ status: "success", data: results });
-
-        case "NEEDS_REVIEW":
-          return NextResponse.json({
-            status: "needs_review",
-            reviewUrl: importStatus.review_url,
-            importId: importResponse.id,
-          });
-
-        case "FAILED":
-          return NextResponse.json(
-            { error: "Import failed", details: importStatus },
-            { status: 400 }
-          );
-
-        case "AWAITING_UPLOAD":
-          console.log(
-            "Still awaiting upload. This might indicate an issue with the upload process."
-          );
-        // Fall through to wait and try again
-        case "PENDING":
-        case "RUNNING":
-          await wait(POLLING_INTERVAL);
-          attempts++;
-          break;
-
-        default:
-          return NextResponse.json(
-            { error: "Unknown status", details: importStatus },
-            { status: 400 }
-          );
+      if (!file) {
+        streamError("No file provided", 400);
+        return;
       }
-    }
 
-    return NextResponse.json(
-      { error: "Import timeout after 30 seconds" },
-      { status: 408 }
-    );
-  } catch (error) {
-    console.error("Headless import error:", error);
-    return NextResponse.json(
-      {
-        error: "Internal server error",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
-  }
+      if (!userDataStr) {
+        streamError("No user data provided", 400);
+        return;
+      }
+
+      const userData = JSON.parse(userDataStr);
+      console.log(
+        "Processing file:",
+        file.name,
+        "type:",
+        file.type,
+        "size:",
+        file.size,
+        "Schema ID:",
+        schemaId || "(Not provided, using default)"
+      );
+      enqueue({ status: "processing", message: "Starting import..." });
+
+      // Create headless import
+      enqueue({
+        status: "processing",
+        message: "Creating Dromo import record...",
+      });
+      const importResponse = await createHeadlessImport(
+        file.name,
+        userData,
+        schemaId
+      );
+      console.log("Import created with ID:", importResponse.id);
+      enqueue({
+        status: "processing",
+        message: `Import record created (ID: ${importResponse.id}). Uploading file...`,
+        importId: importResponse.id,
+      });
+
+      // Upload file
+      const fileBuffer = await file.arrayBuffer();
+      await uploadFileToUrl(
+        importResponse.upload,
+        fileBuffer,
+        file.type || "application/octet-stream"
+      );
+      enqueue({
+        status: "processing",
+        message: "File uploaded. Waiting for Dromo processing...",
+      });
+
+      // Wait a moment
+      await wait(5000); // Initial wait
+
+      // Poll for status
+      let importStatus;
+      let attempts = 0;
+
+      while (attempts < MAX_ATTEMPTS) {
+        importStatus = await checkImportStatus(importResponse.id);
+        const attemptMsg = `Polling Dromo status (${
+          attempts + 1
+        }/${MAX_ATTEMPTS}): ${importStatus.status}`;
+        console.log(attemptMsg);
+        enqueue({
+          status: "polling",
+          message: attemptMsg,
+          dromoStatus: importStatus.status,
+        });
+
+        switch (importStatus.status) {
+          case "SUCCESSFUL":
+            enqueue({
+              status: "processing",
+              message: "Import successful. Downloading results...",
+            });
+            const presignedUrl = await getImportPresignedUrl(importResponse.id);
+            const results = await downloadFromPresignedUrl(presignedUrl);
+            enqueue({ status: "success", data: results });
+            closeStream();
+            return;
+
+          case "NEEDS_REVIEW":
+            enqueue({
+              status: "needs_review",
+              reviewUrl: importStatus.review_url,
+              importId: importResponse.id,
+            });
+            closeStream();
+            return;
+
+          case "FAILED":
+            streamError("Import failed in Dromo", 400, importStatus);
+            return; // Error already sent via streamError
+
+          case "AWAITING_UPLOAD":
+            console.log(
+              "Still awaiting upload. This might indicate an issue with the upload process."
+            );
+            enqueue({
+              status: "polling",
+              message: "Dromo is still awaiting upload...",
+              dromoStatus: importStatus.status,
+            });
+          // Fall through to wait and try again
+          case "PENDING":
+          case "RUNNING":
+            await wait(POLLING_INTERVAL);
+            attempts++;
+            break;
+
+          default:
+            streamError("Unknown Dromo status", 400, importStatus);
+            return; // Error already sent via streamError
+        }
+      }
+
+      streamError("Import timeout after polling", 408, {
+        importId: importResponse.id,
+      });
+    } catch (error) {
+      console.error("Headless import stream error:", error);
+      streamError(
+        "Internal server error during import process",
+        500,
+        error instanceof Error ? error.message : "Unknown error"
+      );
+    }
+  })(); // IIFE to run the async processing
+
+  // Return the stream immediately
+  return new NextResponse(stream, {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8", // Or application/x-ndjson
+      "Cache-Control": "no-cache",
+      "Transfer-Encoding": "chunked",
+    },
+  });
 }
