@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // Use the same base URL as in the main headless route
-const DROMO_API_URL = "http://localhost:8000/api/v1/headless/imports";
+const DROMO_API_URL = "https://app.dromo.io/api/v1/headless/imports";
 
 export async function GET(request: NextRequest) {
   // Get query parameters

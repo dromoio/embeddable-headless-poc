@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "acme - POC",
-  description: "Proof of concept application for acme",
+  title: "Dromo Importer - POC",
+  description: "Proof of concept application demonstrating Dromo importer",
 };
 
 export default function RootLayout({
@@ -37,11 +37,6 @@ export default function RootLayout({
         </main>
         <Toaster />
       </body>
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `window.DROMO_WIDGET_OVERRIDE = "http://localhost:3000/";`,
-        }}
-      />
     </html>
   );
 }

@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const DROMO_API_URL = "http://localhost:8000/api/v1/headless/imports";
+const DROMO_API_URL = "https://app.dromo.io/api/v1/headless/imports";
 const POLLING_INTERVAL = 5000; // 5 seconds in milliseconds
 const MAX_POLLING_TIME = 60000; // 60 seconds total timeout
 const MAX_ATTEMPTS = Math.floor(MAX_POLLING_TIME / POLLING_INTERVAL);
 
-const SCHEMA_ID = process.env.NEXT_PUBLIC_SCHEMA_ID;
-
 async function createHeadlessImport(
   filename: string,
-  userData: Record<string, string>
+  userData: Record<string, string>,
+  schemaId: string | null
 ) {
+  const effectiveSchemaId = schemaId || process.env.NEXT_PUBLIC_SCHEMA_ID;
+
   console.log("Creating headless import with:", {
     filename,
-    schemaId: SCHEMA_ID,
+    schemaId: effectiveSchemaId,
     userData,
   });
 
@@ -24,7 +25,7 @@ async function createHeadlessImport(
       "X-Dromo-License-Key": process.env.DROMO_BACKEND_API_KEY!,
     },
     body: JSON.stringify({
-      schema_id: SCHEMA_ID,
+      schema_id: effectiveSchemaId,
       original_filename: filename,
       import_metadata: {
         user: userData,
@@ -170,6 +171,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("file") as File;
     const userDataStr = formData.get("userData") as string;
+    const schemaId = formData.get("schemaId") as string | null;
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -189,11 +191,17 @@ export async function POST(request: NextRequest) {
       "type:",
       file.type,
       "size:",
-      file.size
+      file.size,
+      "Schema ID:",
+      schemaId || "(Not provided, using default)"
     );
 
-    // Create headless import with user data
-    const importResponse = await createHeadlessImport(file.name, userData);
+    // Create headless import with user data and schemaId
+    const importResponse = await createHeadlessImport(
+      file.name,
+      userData,
+      schemaId
+    );
     console.log("Import created with ID:", importResponse.id);
 
     // Upload file

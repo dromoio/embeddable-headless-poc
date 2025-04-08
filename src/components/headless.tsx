@@ -11,6 +11,7 @@ type RowData = Record<string, string | number | boolean>;
 
 interface HeadlessProps {
   userData: UserFormData;
+  schemaId: string;
 }
 
 type ImportStatus = {
@@ -21,7 +22,7 @@ type ImportStatus = {
   error?: string;
 };
 
-export const Headless = ({ userData }: HeadlessProps) => {
+export const Headless = ({ userData, schemaId }: HeadlessProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [importStatus, setImportStatus] = useState<ImportStatus | null>(null);
   const [showReview, setShowReview] = useState(false);
@@ -47,6 +48,9 @@ export const Headless = ({ userData }: HeadlessProps) => {
 
         formData.append("file", file);
         formData.append("userData", JSON.stringify(userMetadata));
+        if (schemaId) {
+          formData.append("schemaId", schemaId);
+        }
 
         const response = await fetch("/api/headless", {
           method: "POST",
@@ -84,14 +88,14 @@ export const Headless = ({ userData }: HeadlessProps) => {
         setIsUploading(false);
       }
     },
-    [userData]
+    [userData, schemaId]
   );
 
-  const handleStartReview = () => {
-    if (importStatus?.importId) {
-      setShowReview(true);
-    }
-  };
+  // const handleStartReview = () => {
+  //   if (importStatus?.importId) {
+  //     setShowReview(true);
+  //   }
+  // };
 
   const handleReviewComplete = (
     result: "success" | "canceled" | "error",
@@ -168,7 +172,6 @@ export const Headless = ({ userData }: HeadlessProps) => {
           }
           needsReview={importStatus?.status === "needs_review"}
           reviewUrl={importStatus?.reviewUrl}
-          onReview={handleStartReview}
           hasImportId={!!importStatus?.importId}
         />
       </div>

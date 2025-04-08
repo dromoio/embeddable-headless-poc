@@ -7,9 +7,10 @@ import { useState } from "react";
 
 interface EmbeddableProps {
   userData: UserFormData;
+  schemaId: string;
 }
 
-export const Embeddable = ({ userData }: EmbeddableProps) => {
+export const Embeddable = ({ userData, schemaId }: EmbeddableProps) => {
   const [results, setResults] = useState<
     Record<string, string | number | boolean>[]
   >([]);
@@ -26,7 +27,7 @@ export const Embeddable = ({ userData }: EmbeddableProps) => {
     <div className="space-y-4">
       <DromoUploader
         licenseKey={process.env.NEXT_PUBLIC_DROMO_LICENSE_KEY!}
-        schemaId={process.env.NEXT_PUBLIC_SCHEMA_ID!}
+        schemaId={schemaId || process.env.NEXT_PUBLIC_SCHEMA_ID!}
         user={{
           id: "1",
           name: userData.name || "Anonymous",
